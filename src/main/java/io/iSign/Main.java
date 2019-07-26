@@ -31,12 +31,16 @@ import org.apache.http.util.EntityUtils;
 public class Main {
 
 	   public static void main(String[] args) throws Exception {
-	        String apiToken = ""; // Enter access token here
-	        String host = "https://developers.isign.io/";
+	        String apiToken = System.getenv("ACCESS_TOKEN");
 
 	        System.out.println("iSign.io API Java example ");
 
-	        HttpResponse prepareResponse = prepare(host, apiToken);
+	        String filename = getArgument(args, 0, "test.pdf");
+	        String phone = getArgument(args, 1, "+37060000666");
+			String ssn = getArgument(args, 2, "50001018865");
+			String host = getArgument(args, 3, "https://developers.isign.io/");
+
+			HttpResponse prepareResponse = prepare(host, apiToken, filename, phone, ssn);
 
 	        JsonReader jsonReader = Json.createReader(new StringReader(EntityUtils.toString(prepareResponse.getEntity(),  "UTF-8")));
 	        JsonObject prepareJson = jsonReader.readObject();
@@ -49,6 +53,16 @@ public class Main {
 	        	System.out.println("Responded with error:" + prepareJson.getString("message") );
 	        }
 	    }
+
+	private static String getArgument(String[] args, int argPosition, String defaultValue) {
+		String filename;
+		if (args.length > argPosition) {
+			filename = args[argPosition];
+		} else {
+			filename = defaultValue;
+		}
+		return filename;
+	}
 
 	   public static void status(String host, String apiToken, String token) throws Exception {
 
@@ -84,20 +98,29 @@ public class Main {
 	       	}
 	   }
 
-	   public static HttpResponse prepare(String host, String apiToken) throws Exception {
-		   byte[] fileData = loadFile("test.pdf");
+	   public static HttpResponse prepare(String host, String apiToken, String filename, String phone, String ssn) throws Exception {
+		   byte[] fileData = loadFile(filename);
+
+		   String base64EncodedContent = new String(DatatypeConverter.printBase64Binary(fileData));
+		   String digest = toSHA1(fileData);
+
+		   FileUtils.writeStringToFile(new File(filename + ".base64"), base64EncodedContent);
+		   FileUtils.writeStringToFile(new File(filename + ".sha1"), digest);
 
 	        List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
 	        nameValuePairs.add(new BasicNameValuePair("type", "pdf"));
-	        nameValuePairs.add(new BasicNameValuePair("phone", "+37060000007"));
-	        nameValuePairs.add(new BasicNameValuePair("code", "51001091072"));
+
+	        nameValuePairs.add(new BasicNameValuePair("phone", phone));
+	        nameValuePairs.add(new BasicNameValuePair("code", ssn));
+
 	        nameValuePairs.add(new BasicNameValuePair("language", "EN"));
 	        nameValuePairs.add(new BasicNameValuePair("pdf[contact]", "Seventh Testnumber"));
 	        nameValuePairs.add(new BasicNameValuePair("pdf[reason]", "Agreement"));
 	        nameValuePairs.add(new BasicNameValuePair("pdf[location]", "Vilnius"));
-	        nameValuePairs.add(new BasicNameValuePair("pdf[files][0][name]", "test.pdf"));
-	        nameValuePairs.add(new BasicNameValuePair("pdf[files][0][content]", new String(DatatypeConverter.printBase64Binary(fileData))));
-	        nameValuePairs.add(new BasicNameValuePair("pdf[files][0][digest]", toSHA1(fileData)));
+	        //nameValuePairs.add(new BasicNameValuePair("pdf[annotation][text]", "Annotation"));
+	        nameValuePairs.add(new BasicNameValuePair("pdf[files][0][name]", filename));
+			nameValuePairs.add(new BasicNameValuePair("pdf[files][0][content]", base64EncodedContent));
+			nameValuePairs.add(new BasicNameValuePair("pdf[files][0][digest]", digest));
 
 	        HttpClient client = HttpClientBuilder.create().build();
 	        HttpPost method = new HttpPost(host + "mobile/sign.json?access_token=" + apiToken);
